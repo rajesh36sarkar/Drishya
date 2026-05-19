@@ -7,13 +7,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FaThumbsUp, FaThumbsDown, FaUser, FaEdit, FaTrash, 
   FaClock, FaList, FaShare, FaCog, FaExpand, FaCompress,
-  FaDownload, FaFlag, FaSave, FaHeart
+  FaPlay, FaEye, FaCalendarAlt
 } from 'react-icons/fa';
 import useKeyboardShortcuts from '../hooks/useKeyboardShortcuts';
 
 const VideoPlayerPage = () => {
   const { id } = useParams();
   const videoRef = useRef(null);
+  const settingsRef = useRef(null);
+  const playlistRef = useRef(null);
+  const shareRef = useRef(null);
+
   const [video, setVideo] = useState(null);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
@@ -36,6 +40,7 @@ const VideoPlayerPage = () => {
     fetchVideo();
     fetchComments();
     fetchRecommendations();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [id]);
 
   useEffect(() => {
@@ -43,6 +48,16 @@ const VideoPlayerPage = () => {
       addToWatchHistory(video);
     }
   }, [video]);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target)) setShowSettings(false);
+      if (playlistRef.current && !playlistRef.current.contains(e.target)) setShowPlaylistMenu(false);
+      if (shareRef.current && !shareRef.current.contains(e.target)) setShowShareMenu(false);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   const fetchVideo = async () => {
     try {
@@ -57,7 +72,7 @@ const VideoPlayerPage = () => {
   const fetchComments = async () => {
     try {
       const res = await axios.get(`/comments/video/${id}`);
-      setComments(res.data);
+      setComments(res.data || []);
     } catch (error) {
       console.error('Error fetching comments:', error);
     }
@@ -66,7 +81,7 @@ const VideoPlayerPage = () => {
   const fetchRecommendations = async () => {
     try {
       const res = await axios.get('/videos');
-      const otherVideos = res.data.filter(v => v._id !== id).slice(0, 10);
+      const otherVideos = res.data.filter(v => v._id !== id).slice(0, 8);
       setRecommendations(otherVideos);
     } catch (error) {
       console.error('Error fetching recommendations:', error);
@@ -77,7 +92,7 @@ const VideoPlayerPage = () => {
     if (!user) return;
     try {
       await axios.patch(`/videos/${id}/like`);
-      setVideo({ ...video, likes: video.likes + 1 });
+      setVideo(prev => prev ? { ...prev, likes: prev.likes + 1 } : null);
       setLiked(true);
       if (disliked) setDisliked(false);
     } catch (error) {
@@ -89,7 +104,6 @@ const VideoPlayerPage = () => {
     if (!user) return;
     try {
       await axios.patch(`/videos/${id}/dislike`);
-      setVideo({ ...video, dislikes: video.dislikes + 1 });
       setDisliked(true);
       if (liked) setLiked(false);
     } catch (error) {
@@ -130,317 +144,252 @@ const VideoPlayerPage = () => {
 
   const changeSpeed = (newSpeed) => {
     setSpeed(newSpeed);
-    if (videoRef.current) {
-      videoRef.current.playbackRate = newSpeed;
-    }
+    if (videoRef.current) videoRef.current.playbackRate = newSpeed;
     setShowSettings(false);
   };
 
   const toggleFullscreen = () => {
     if (!videoRef.current) return;
     if (!isFullscreen) {
-      videoRef.current.requestFullscreen();
+      videoRef.current.requestFullscreen?.() || videoRef.current.webkitRequestFullscreen?.();
       setIsFullscreen(true);
     } else {
-      document.exitFullscreen();
+      document.exitFullscreen?.() || document.webkitExitFullscreen?.();
       setIsFullscreen(false);
     }
   };
 
   const shareVideo = () => {
-    const url = window.location.href;
-    navigator.clipboard.writeText(url);
-    alert('Video link copied to clipboard!');
+    navigator.clipboard.writeText(window.location.href);
+    alert('Link dispatched to local clipboard layer successfully!');
     setShowShareMenu(false);
   };
 
   const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
   
   const formatViews = (views) => {
+    if (!views) return '0';
     if (views >= 1000000) return (views / 1000000).toFixed(1) + 'M';
     if (views >= 1000) return (views / 1000).toFixed(1) + 'K';
     return views;
   };
 
   if (!video) return (
-    <div className="flex items-center justify-center min-h-screen pt-[60px]">
-      <div className="loading-spinner"></div>
+    <div className="flex flex-col items-center justify-center min-h-[70vh] w-full">
+      <div className="w-12 h-12 rounded-full border-4 border-zinc-800 border-t-purple-600 animate-spin" />
     </div>
   );
 
   return (
-    <div className="pt-[72px] px-4 md:px-8 max-w-7xl mx-auto pb-8">
-      <div className="flex flex-col lg:flex-row gap-6">
-        <div className="flex-1">
-          {/* Video Player */}
-          <div className="relative aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl">
+    <div className="w-full mx-auto xl:px-4 max-w-[1650px]">
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        
+        <div className="flex-1 w-full lg:max-w-[calc(100%-400px)]">
+          <div className="relative aspect-video bg-black rounded-2xl md:rounded-3xl overflow-hidden shadow-[0_24px_50px_rgba(0,0,0,0.2)] group border border-zinc-900">
             <video 
               ref={videoRef}
               src={video.videoUrl} 
               controls 
-              className="w-full h-full" 
+              className="w-full h-full object-contain" 
               poster={video.thumbnailUrl}
               controlsList="nodownload"
             />
             
-            {/* Video Controls Overlay */}
-            <div className="absolute bottom-4 right-4 flex gap-2 z-20">
-              <button
-                onClick={() => setShowSettings(!showSettings)}
-                className="p-2 bg-black/50 rounded-full hover:bg-black/70 transition"
-              >
-                <FaCog className="text-white" />
-              </button>
+            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
+              <div className="relative" ref={settingsRef}>
+                <button
+                  onClick={() => setShowSettings(!showSettings)}
+                  className="p-3 bg-black/60 backdrop-blur-md text-white rounded-xl hover:bg-black/80 transition active:scale-90"
+                >
+                  <FaCog className={showSettings ? 'animate-spin' : ''} />
+                </button>
+                <AnimatePresence>
+                  {showSettings && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                      className="absolute right-0 mt-2 bg-zinc-950/95 backdrop-blur-md border border-zinc-800 rounded-xl p-3 min-w-[180px] shadow-2xl z-30"
+                    >
+                      <p className="text-[10px] uppercase font-bold tracking-widest text-zinc-500 mb-2">Speed Factor</p>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {speeds.map(s => (
+                          <button
+                            key={s}
+                            onClick={() => changeSpeed(s)}
+                            className={`px-1 py-1.5 rounded-lg font-bold text-xs transition ${
+                              speed === s ? 'bg-purple-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            {s}x
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
               <button
                 onClick={toggleFullscreen}
-                className="p-2 bg-black/50 rounded-full hover:bg-black/70 transition"
+                className="p-3 bg-black/60 backdrop-blur-md text-white rounded-xl hover:bg-black/80 transition active:scale-90"
               >
-                {isFullscreen ? <FaCompress className="text-white" /> : <FaExpand className="text-white" />}
+                {isFullscreen ? <FaCompress /> : <FaExpand />}
               </button>
             </div>
-            
-            {/* Speed Settings */}
-            {showSettings && (
-              <div className="absolute bottom-20 right-4 bg-black/90 rounded-lg p-3 min-w-40 z-20">
-                <p className="text-xs text-gray-400 mb-2">Playback Speed</p>
-                <div className="flex flex-wrap gap-2">
-                  {speeds.map(s => (
-                    <button
-                      key={s}
-                      onClick={() => changeSpeed(s)}
-                      className={`px-2 py-1 text-sm rounded ${speed === s ? 'bg-purple-600' : 'bg-gray-700'}`}
-                    >
-                      {s}x
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
           
-          {/* Video Title */}
-          <h1 className="text-xl md:text-2xl font-bold mt-4 text-gray-900 dark:text-white">
+          <h1 className="text-xl md:text-2xl font-black tracking-tight mt-5 leading-tight text-[var(--text-primary)]">
             {video.title}
           </h1>
           
-          {/* Channel Info & Actions */}
-          <div className="flex flex-wrap justify-between items-start gap-4 mt-2">
-            <div>
-              <p className="font-semibold text-purple-600 dark:text-purple-400">
-                {video.channel?.channelName}
-              </p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {formatViews(video.views)} views • {new Date(video.uploadDate).toLocaleDateString()}
-              </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 pb-5 border-b border-gray-100 dark:border-zinc-900">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-600 flex items-center justify-center text-white font-extrabold text-sm shadow-md">
+                {video.channel?.channelName ? video.channel.channelName[0].toUpperCase() : 'C'}
+              </div>
+              <div>
+                <h2 className="font-bold text-sm text-[var(--text-primary)]">{video.channel?.channelName || 'Independent Producer'}</h2>
+                <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] font-semibold mt-0.5">
+                  <span className="flex items-center gap-1"><FaEye /> {formatViews(video.views)}</span>
+                  <span className="w-1 h-1 rounded-full bg-zinc-500" />
+                  <span className="flex items-center gap-1"><FaCalendarAlt /> {new Date(video.uploadDate).toLocaleDateString(undefined, {dateStyle:'medium'})}</span>
+                </div>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <motion.button 
-                whileTap={{ scale: 0.95 }} 
-                onClick={handleLike} 
-                className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${
-                  liked 
-                    ? 'bg-blue-500 text-white' 
-                    : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'
-                }`}
-              >
-                <FaThumbsUp /> {formatViews(video.likes)}
-              </motion.button>
-              <motion.button 
-                whileTap={{ scale: 0.95 }} 
-                onClick={handleDislike} 
-                className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${
-                  disliked 
-                    ? 'bg-red-500 text-white' 
-                    : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'
-                }`}
-              >
-                <FaThumbsDown /> {formatViews(video.dislikes)}
-              </motion.button>
-              
-              {/* Watch Later Button */}
-              <motion.button 
-                whileTap={{ scale: 0.95 }} 
-                onClick={() => addToWatchLater(video)}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 transition-all"
-              >
-                <FaClock /> Watch Later
-              </motion.button>
-              
-              {/* Save to Playlist */}
-              <div className="relative">
-                <motion.button 
-                  whileTap={{ scale: 0.95 }} 
-                  onClick={() => setShowPlaylistMenu(!showPlaylistMenu)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 transition-all"
-                >
-                  <FaList /> Save
-                </motion.button>
-                
-                {showPlaylistMenu && playlists.length > 0 && (
-                  <div className="absolute top-full right-0 mt-2 w-64 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-2 z-10">
-                    {playlists.map(playlist => (
-                      <button
-                        key={playlist.id}
-                        onClick={() => {
-                          addToPlaylist(playlist.id, video);
-                          setShowPlaylistMenu(false);
-                        }}
-                        className="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-sm"
-                      >
-                        {playlist.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center bg-gray-100 dark:bg-zinc-900 rounded-xl p-1 border border-transparent dark:border-zinc-800/60 shadow-sm">
+                <button onClick={handleLike} className={`flex items-center gap-2 px-4 py-2 font-bold text-xs rounded-lg transition-all ${liked ? 'bg-purple-600 text-white shadow-md' : 'text-[var(--text-secondary)] hover:bg-zinc-200 dark:hover:bg-zinc-800'}`}>
+                  <FaThumbsUp /> {formatViews(video.likes)}
+                </button>
+                <div className="w-px h-4 bg-zinc-300 dark:bg-zinc-800 mx-1" />
+                <button onClick={handleDislike} className={`flex items-center gap-2 px-4 py-2 font-bold text-xs rounded-lg transition-all ${disliked ? 'bg-rose-600 text-white shadow-md' : 'text-[var(--text-secondary)] hover:bg-zinc-200 dark:hover:bg-zinc-800'}`}>
+                  <FaThumbsDown />
+                </button>
               </div>
               
-              {/* Share Button */}
-              <div className="relative">
-                <motion.button 
-                  whileTap={{ scale: 0.95 }} 
-                  onClick={() => setShowShareMenu(!showShareMenu)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 transition-all"
-                >
-                  <FaShare /> Share
-                </motion.button>
-                
-                {showShareMenu && (
-                  <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-2 z-10">
-                    <button onClick={shareVideo} className="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-sm">
-                      Copy Link
-                    </button>
-                    <button className="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-sm">
-                      Share to Twitter
-                    </button>
-                  </div>
-                )}
+              <button onClick={() => addToWatchLater(video)} className="flex items-center gap-2 px-4 py-3 font-bold text-xs rounded-xl bg-gray-100 dark:bg-zinc-900 border dark:border-zinc-800/40 hover:bg-gray-200 dark:hover:bg-zinc-800 transition shadow-sm text-[var(--text-secondary)]">
+                <FaClock className="text-purple-500" /> Watch Later
+              </button>
+              
+              <div className="relative" ref={playlistRef}>
+                <button onClick={() => setShowPlaylistMenu(!showPlaylistMenu)} className="flex items-center gap-2 px-4 py-3 font-bold text-xs rounded-xl bg-gray-100 dark:bg-zinc-900 border dark:border-zinc-800/40 hover:bg-gray-200 dark:hover:bg-zinc-800 transition shadow-sm text-[var(--text-secondary)]">
+                  <FaList className="text-indigo-500" /> Save
+                </button>
+                <AnimatePresence>
+                  {showPlaylistMenu && playlists?.length > 0 && (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute right-0 mt-2 w-64 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-xl p-1.5 shadow-2xl z-30">
+                      {playlists.map(p => (
+                        <button key={p.id} onClick={() => { addToPlaylist(p.id, video); setShowPlaylistMenu(false); }} className="block w-full text-left px-3 py-2 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-lg">
+                          {p.name}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              
+              <div className="relative" ref={shareRef}>
+                <button onClick={() => setShowShareMenu(!showShareMenu)} className="flex items-center gap-2 px-4 py-3 font-bold text-xs rounded-xl bg-gray-100 dark:bg-zinc-900 border dark:border-zinc-800/40 hover:bg-gray-200 dark:hover:bg-zinc-800 transition shadow-sm text-[var(--text-secondary)]">
+                  <FaShare className="text-pink-500" /> Share
+                </button>
+                <AnimatePresence>
+                  {showShareMenu && (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute right-0 mt-2 w-48 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-xl p-1.5 shadow-2xl z-30">
+                      <button onClick={shareVideo} className="block w-full text-left px-3 py-2 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-lg">Copy Link Block</button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           </div>
           
-          {/* Description */}
-          <p className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-xl text-gray-700 dark:text-gray-300">
-            {video.description}
-          </p>
+          <div className="mt-5 p-4 md:p-5 bg-gray-50 dark:bg-zinc-900/40 rounded-2xl border border-gray-100 dark:border-zinc-900/60 shadow-inner">
+            <p className="text-xs md:text-sm leading-relaxed text-[var(--text-secondary)] font-medium whitespace-pre-line">
+              {video.description || 'No descriptive information accompanied this premium content transmission release.'}
+            </p>
+          </div>
 
-          {/* Comments Section */}
           <div className="mt-8">
-            <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-              Comments ({comments.length})
+            <h3 className="text-lg font-black tracking-tight text-[var(--text-primary)] mb-5">
+              Discussions ({comments.length})
             </h3>
             
             {user ? (
-              <form onSubmit={addComment} className="mb-6 flex gap-3">
+              <form onSubmit={addComment} className="mb-6 flex gap-3 items-center">
                 <input
                   type="text"
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Add a comment..."
-                  className="flex-1 px-5 py-3 bg-gray-100 dark:bg-gray-800 rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
+                  placeholder="Join the discussion thread..."
+                  className="flex-1 px-5 py-3 text-xs bg-gray-100 dark:bg-zinc-900 border border-transparent focus:border-purple-500 rounded-xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 text-[var(--text-primary)] placeholder:text-gray-400 dark:placeholder:text-zinc-500"
                 />
-                <button 
-                  type="submit" 
-                  className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full font-semibold hover:shadow-lg transition-all"
-                >
-                  Post
-                </button>
+                <button type="submit" className="px-5 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-xs rounded-xl shadow-md hover:opacity-95 transition">Post</button>
               </form>
             ) : (
-              <p className="text-gray-500 dark:text-gray-400 mb-4">Sign in to leave a comment</p>
+              <div className="p-4 rounded-xl border border-dashed border-gray-200 dark:border-zinc-800 text-center mb-6">
+                <p className="text-xs text-[var(--text-muted)] font-semibold">Please authenticate an active profile session to post comments.</p>
+              </div>
             )}
             
-            <AnimatePresence>
-              {comments.map((comment) => (
-                <motion.div 
-                  key={comment._id} 
-                  initial={{ opacity: 0, y: 20 }} 
-                  animate={{ opacity: 1, y: 0 }} 
-                  exit={{ opacity: 0 }} 
-                  className="flex gap-3 mb-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-xl"
-                >
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 flex items-center justify-center flex-shrink-0">
-                    <FaUser className="text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start flex-wrap gap-2">
-                      <div>
-                        <span className="font-semibold text-gray-900 dark:text-white">
-                          {comment.user?.username}
-                        </span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-                          {new Date(comment.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                      {user && user.id === comment.user?._id && (
-                        <div className="flex gap-2">
-                          <button 
-                            onClick={() => setEditingComment(comment)}
-                            className="text-gray-500 hover:text-purple-500 transition-colors"
-                          >
-                            <FaEdit />
-                          </button>
-                          <button 
-                            onClick={() => deleteComment(comment._id)}
-                            className="text-gray-500 hover:text-red-500 transition-colors"
-                          >
-                            <FaTrash />
-                          </button>
+            <div className="space-y-3.5">
+              <AnimatePresence mode="popLayout">
+                {comments.map((comment) => (
+                  <motion.div key={comment._id} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="flex gap-3 p-4 bg-gray-50/60 dark:bg-zinc-900/20 border border-gray-100 dark:border-zinc-900/40 rounded-xl">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{comment.user?.username ? comment.user.username[0].toUpperCase() : 'U'}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-center gap-2">
+                        <div className="truncate">
+                          <span className="font-bold text-xs text-[var(--text-primary)] mr-2">{comment.user?.username}</span>
+                          <span className="text-[10px] font-semibold text-[var(--text-muted)]">{new Date(comment.createdAt).toLocaleDateString()}</span>
                         </div>
+                        {user && user.id === comment.user?._id && (
+                          <div className="flex gap-2 flex-shrink-0">
+                            <button onClick={() => setEditingComment(comment)} className="text-zinc-400 hover:text-purple-500 text-xs transition"><FaEdit /></button>
+                            <button onClick={() => deleteComment(comment._id)} className="text-zinc-400 hover:text-rose-500 text-xs transition"><FaTrash /></button>
+                          </div>
+                        )}
+                      </div>
+                      {editingComment?._id === comment._id ? (
+                        <form onSubmit={(e) => { e.preventDefault(); updateComment(comment._id, e.target.text.value); }} className="mt-2 flex gap-2">
+                          <input name="text" defaultValue={comment.text} className="flex-1 px-3 py-1.5 text-xs bg-white dark:bg-zinc-950 border dark:border-zinc-800 rounded-lg outline-none" autoFocus />
+                          <button type="submit" className="text-xs font-bold text-purple-500 px-2">Save</button>
+                        </form>
+                      ) : (
+                        <p className="mt-1 text-xs md:text-sm text-[var(--text-secondary)] font-medium leading-normal">{comment.text}</p>
                       )}
                     </div>
-                    {editingComment?._id === comment._id ? (
-                      <form onSubmit={(e) => { 
-                        e.preventDefault(); 
-                        updateComment(comment._id, e.target.text.value); 
-                      }} className="mt-2">
-                        <input 
-                          name="text" 
-                          defaultValue={comment.text} 
-                          className="w-full px-3 py-2 bg-white dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500" 
-                          autoFocus 
-                        />
-                        <button type="submit" className="mt-2 text-sm text-purple-500 hover:text-purple-600">
-                          Save
-                        </button>
-                      </form>
-                    ) : (
-                      <p className="mt-1 text-gray-700 dark:text-gray-300">{comment.text}</p>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-            
-            {comments.length === 0 && (
-              <p className="text-center text-gray-500 dark:text-gray-400 py-8">
-                No comments yet. Be the first to comment!
-              </p>
-            )}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
         
-        {/* Recommendations Sidebar */}
-        <div className="lg:w-96">
-          <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Recommended</h3>
-          <div className="space-y-4">
+        <div className="w-full lg:w-96 flex-shrink-0 border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-zinc-900 pt-6 lg:pt-0 lg:pl-6">
+          <h3 className="text-md font-black tracking-tight mb-4 text-[var(--text-primary)]">Up Next</h3>
+          <div className="flex flex-col gap-3.5">
             {recommendations.map(rec => (
-              <Link to={`/video/${rec._id}`} key={rec._id} className="flex gap-3 group">
-                <img 
-                  src={rec.thumbnailUrl} 
-                  className="w-40 h-24 object-cover rounded-lg" 
-                  alt={rec.title} 
-                />
-                <div className="flex-1">
-                  <h4 className="font-medium text-sm group-hover:text-purple-600 line-clamp-2 text-gray-900 dark:text-white">
+              <Link to={`/video/${rec._id}`} key={rec._id} className="flex gap-3 group relative w-full items-start">
+                <div className="relative w-36 aspect-[16/10] bg-zinc-900 rounded-xl overflow-hidden flex-shrink-0 border border-transparent dark:border-zinc-800">
+                  <img src={rec.thumbnailUrl} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" alt={rec.title} />
+                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <FaPlay className="text-white text-[10px]" />
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-xs group-hover:text-purple-500 text-[var(--text-primary)] line-clamp-2 leading-tight transition-colors">
                     {rec.title}
                   </h4>
-                  <p className="text-xs text-gray-500 mt-1">{rec.channel?.channelName}</p>
-                  <p className="text-xs text-gray-400">{formatViews(rec.views)} views</p>
+                  <p className="text-[11px] text-[var(--text-muted)] font-semibold mt-1 truncate">{rec.channel?.channelName || 'Premium Creator'}</p>
+                  <p className="text-[10px] text-[var(--text-muted)] font-medium mt-0.5">{formatViews(rec.views)} views</p>
                 </div>
               </Link>
             ))}
           </div>
         </div>
+
       </div>
     </div>
   );

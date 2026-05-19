@@ -3,47 +3,68 @@ import { useEffect } from 'react';
 const useKeyboardShortcuts = (videoRef, onSearchFocus) => {
   useEffect(() => {
     const handleKeyPress = (e) => {
-      // Space: Play/Pause
-      if (e.code === 'Space' && videoRef?.current && document.activeElement?.tagName !== 'INPUT') {
-        e.preventDefault();
-        if (videoRef.current.paused) {
-          videoRef.current.play();
-        } else {
-          videoRef.current.pause();
-        }
+      const activeElementTag = document.activeElement?.tagName;
+      if (
+        activeElementTag === 'INPUT' || 
+        activeElementTag === 'TEXTAREA' || 
+        document.activeElement?.isContentEditable
+      ) {
+        return;
       }
-      // F: Fullscreen
-      if (e.code === 'KeyF' && videoRef?.current) {
-        e.preventDefault();
-        if (videoRef.current.requestFullscreen) {
-          videoRef.current.requestFullscreen();
-        }
-      }
-      // M: Mute
-      if (e.code === 'KeyM' && videoRef?.current) {
-        e.preventDefault();
-        videoRef.current.muted = !videoRef.current.muted;
-      }
-      // Arrow Left: Rewind 5s
-      if (e.code === 'ArrowLeft' && videoRef?.current) {
-        e.preventDefault();
-        videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 5);
-      }
-      // Arrow Right: Forward 5s
-      if (e.code === 'ArrowRight' && videoRef?.current) {
-        e.preventDefault();
-        videoRef.current.currentTime = Math.min(videoRef.current.duration, videoRef.current.currentTime + 5);
-      }
-      // / : Focus search
-      if (e.code === 'Slash' && onSearchFocus) {
-        e.preventDefault();
-        onSearchFocus();
-      }
-      // Escape: Exit fullscreen
-      if (e.code === 'Escape') {
-        if (document.fullscreenElement) {
-          document.exitFullscreen();
-        }
+
+      const video = videoRef?.current;
+      if (!video) return;
+
+      switch (e.code) {
+        case 'Space':
+          e.preventDefault();
+          if (video.paused) {
+            video.play().catch(err => console.log("Play operation interrupted:", err));
+          } else {
+            video.pause();
+          }
+          break;
+
+        case 'KeyF':
+          e.preventDefault();
+          if (!document.fullscreenElement) {
+            video.requestFullscreen?.() || video.webkitRequestFullscreen?.();
+          } else {
+            document.exitFullscreen?.();
+          }
+          break;
+
+        case 'KeyM':
+          e.preventDefault();
+          video.muted = !video.muted;
+          break;
+
+        case 'ArrowLeft':
+          e.preventDefault();
+          video.currentTime = Math.max(0, video.currentTime - 5);
+          break;
+
+        case 'ArrowRight':
+          e.preventDefault();
+          const targetDuration = video.duration || video.currentTime;
+          video.currentTime = Math.min(targetDuration, video.currentTime + 5);
+          break;
+
+        case 'Slash':
+          if (onSearchFocus) {
+            e.preventDefault();
+            onSearchFocus();
+          }
+          break;
+
+        case 'Escape':
+          if (document.fullscreenElement) {
+            document.exitFullscreen?.();
+          }
+          break;
+
+        default:
+          break;
       }
     };
 

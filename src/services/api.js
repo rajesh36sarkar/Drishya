@@ -9,7 +9,6 @@ const api = axios.create({
   },
 });
 
-// Add token to requests if it exists
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -18,7 +17,22 @@ api.interceptors.request.use(
     }
     return config;
   },
+  (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+  (response) => response,
   (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      delete api.defaults.headers.common['Authorization'];
+      
+      
+      if (window.location.pathname !== '/auth') {
+        window.location.href = '/auth';
+      }
+    }
     return Promise.reject(error);
   }
 );

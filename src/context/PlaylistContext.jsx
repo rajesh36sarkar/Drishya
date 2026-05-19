@@ -1,8 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-const PlaylistContext = createContext();
+const PlaylistContext = createContext(null);
 
-export const usePlaylist = () => useContext(PlaylistContext);
+export const usePlaylist = () => {
+  const context = useContext(PlaylistContext);
+  if (!context) throw new Error('usePlaylist must be called within an explicitly initialized PlaylistProvider state hub.');
+  return context;
+};
 
 export const PlaylistProvider = ({ children }) => {
   const [watchLater, setWatchLater] = useState([]);
@@ -10,17 +14,21 @@ export const PlaylistProvider = ({ children }) => {
   const [watchHistory, setWatchHistory] = useState([]);
 
   useEffect(() => {
-    // Load saved data
     const savedWatchLater = localStorage.getItem('watchLater');
     const savedPlaylists = localStorage.getItem('playlists');
     const savedHistory = localStorage.getItem('watchHistory');
     
-    if (savedWatchLater) setWatchLater(JSON.parse(savedWatchLater));
-    if (savedPlaylists) setPlaylists(JSON.parse(savedPlaylists));
-    if (savedHistory) setWatchHistory(JSON.parse(savedHistory));
+    try {
+      if (savedWatchLater) setWatchLater(JSON.parse(savedWatchLater));
+      if (savedPlaylists) setPlaylists(JSON.parse(savedPlaylists));
+      if (savedHistory) setWatchHistory(JSON.parse(savedHistory));
+    } catch (err) {
+      console.error("Local storage cluster indexing recovery failure:", err);
+    }
   }, []);
 
   const addToWatchLater = (video) => {
+    if (!video?._id) return;
     setWatchLater(prev => {
       if (!prev.find(v => v._id === video._id)) {
         const newList = [video, ...prev];
@@ -32,12 +40,15 @@ export const PlaylistProvider = ({ children }) => {
   };
 
   const removeFromWatchLater = (videoId) => {
-    const newList = watchLater.filter(v => v._id !== videoId);
-    setWatchLater(newList);
-    localStorage.setItem('watchLater', JSON.stringify(newList));
+    setWatchLater(prev => {
+      const newList = prev.filter(v => v._id !== videoId);
+      localStorage.setItem('watchLater', JSON.stringify(newList));
+      return newList;
+    });
   };
 
   const addToWatchHistory = (video) => {
+    if (!video?._id) return;
     setWatchHistory(prev => {
       const filtered = prev.filter(v => v._id !== video._id);
       const newHistory = [{ ...video, watchedAt: new Date().toISOString() }, ...filtered].slice(0, 100);
@@ -52,73 +63,75 @@ export const PlaylistProvider = ({ children }) => {
   };
 
   const createPlaylist = (name, description = '') => {
+    if (!name.trim()) return null;
     const newPlaylist = {
       id: Date.now().toString(),
-      name,
-      description,
+      name: name.trim(),
+      description: description.trim(),
       videos: [],
       createdAt: new Date().toISOString(),
       videoCount: 0
     };
-    const updated = [...playlists, newPlaylist];
-    setPlaylists(updated);
-    localStorage.setItem('playlists', JSON.stringify(updated));
+    setPlaylists(prev => {
+      const updated = [...prev, newPlaylist];
+      localStorage.setItem('playlists', JSON.stringify(updated));
+      return updated;
+    });
     return newPlaylist;
   };
 
   const deletePlaylist = (playlistId) => {
-    const updated = playlists.filter(p => p.id !== playlistId);
-    setPlaylists(updated);
-    localStorage.setItem('playlists', JSON.stringify(updated));
+    setPlaylists(prev => {
+      const updated = prev.filter(p => p.id !== playlistId);
+      localStorage.setItem('playlists', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const addToPlaylist = (playlistId, video) => {
-    setPlaylists(prev => prev.map(playlist => {
-      if (playlist.id === playlistId && !playlist.videos.find(v => v._id === video._id)) {
-        const updated = {
-          ...playlist,
-          videos: [...playlist.videos, video],
-          videoCount: playlist.videos.length + 1
-        };
-        localStorage.setItem('playlists', JSON.stringify(playlists.map(p => 
-          p.id === playlistId ? updated : p
-        )));
-        return updated;
-      }
-      return playlist;
-    }));
+    if (!video?._id) return;
+    setPlaylists(prev => {
+      const updatedPlaylists = prev.map(playlist => {
+        if (playlist.id === playlistId && !playlist.videos.find(v => v._id === video._id)) {
+          const updatedVideos = [...playlist.videos, video];
+          return {
+            ...playlist,
+            videos: updatedVideos,
+            videoCount: updatedVideos.length
+          };
+        }
+        return playlist;
+      });
+     
+      localStorage.setItem('playlists', JSON.stringify(updatedPlaylists));
+      return updatedPlaylists;
+    });
   };
 
   const removeFromPlaylist = (playlistId, videoId) => {
-    setPlaylists(prev => prev.map(playlist => {
-      if (playlist.id === playlistId) {
-        const updated = {
-          ...playlist,
-          videos: playlist.videos.filter(v => v._id !== videoId),
-          videoCount: playlist.videos.length - 1
-        };
-        localStorage.setItem('playlists', JSON.stringify(playlists.map(p => 
-          p.id === playlistId ? updated : p
-        )));
-        return updated;
-      }
-      return playlist;
-    }));
+    setPlaylists(prev => {
+      const updatedPlaylists = prev.map(playlist => {
+        if (playlist.id === playlistId) {
+          const updatedVideos = playlist.videos.filter(v => v._id !== videoId);
+          return {
+            ...playlist,
+            videos: updatedVideos,
+            videoCount: updatedVideos.length
+          };
+        }
+        return playlist;
+      });
+
+      localStorage.setItem('playlists', JSON.stringify(updatedPlaylists));
+      return updatedPlaylists;
+    });
   };
 
   return (
     <PlaylistContext.Provider value={{
-      watchLater,
-      playlists,
-      watchHistory,
-      addToWatchLater,
-      removeFromWatchLater,
-      addToWatchHistory,
-      clearHistory,
-      createPlaylist,
-      deletePlaylist,
-      addToPlaylist,
-      removeFromPlaylist
+      watchLater, playlists, watchHistory,
+      addToWatchLater, removeFromWatchLater, addToWatchHistory, clearHistory,
+      createPlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist
     }}>
       {children}
     </PlaylistContext.Provider>

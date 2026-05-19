@@ -1,9 +1,13 @@
 import React from 'react';
+import { FaFire, FaChartLine } from 'react-icons/fa';
 
 const TrendingPage = () => (
-  <div className="pt-[72px] px-6 py-8">
-    <h1 className="text-3xl font-bold gradient-text mb-4">Trending Videos</h1>
-    <p className="text-gray-600 dark:text-gray-400">Trending content coming soon...</p>
+  <div className="w-full flex flex-col items-center justify-center py-28 text-center border border-dashed border-gray-200 dark:border-zinc-800/60 rounded-3xl max-w-md mx-auto px-4">
+    <div className="w-14 h-14 bg-zinc-50 dark:bg-zinc-900/60 rounded-2xl flex items-center justify-center text-zinc-400 mb-4 shadow-inner">
+      <FaFire className="text-lg text-amber-500 animate-bounce" style={{ animationDuration: '3s' }} />
+    </div>
+    <h3 className="text-sm font-bold text-[var(--text-primary)] mb-1">Global Metrics Radar</h3>
+    <p className="text-xs text-[var(--text-muted)] max-w-xs">Analyzing real-time velocity metadata algorithms across nodes. Highest volume watch streams will populate this terminal section shortly.</p>
   </div>
 );
 
